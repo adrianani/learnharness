@@ -17,12 +17,12 @@
  * 127.0.0.1 on a kernel-assigned
  * free port, NODE_ENV=production, a THROWAWAY LH_DATA_DIR and an EMPTY
  * LH_AUTH_FILE under os.tmpdir() (no real keys or data ever touch it) —
- * polls GET / until 200, then probes the GET-only API surface (graph /
- * models / settings — no side effects). Any non-200, an early server
- * exit, or a 30s boot timeout fails the gate and prints the server's own
- * log tail for diagnosis. The child is ALWAYS killed before exit — a
- * leaked server holds its port against the next run (learned the hard
- * way, same day).
+ * polls GET / until 200, then probes the API surface (graph / models /
+ * settings) and starts/cancels ChatGPT login without contacting OpenAI.
+ * This exercises OAuth's dynamically loaded runtime dependencies. Any
+ * non-200, early server exit, or boot timeout fails and prints the log.
+ * The child is always killed before exit so its ports cannot leak into
+ * subsequent packaging runs.
  */
 import { spawn } from "node:child_process";
 import { probeEnv, verifyDemoRuntime } from "./smoke-demo-runtime.mjs";
@@ -162,6 +162,37 @@ async function main() {
 			const status = await get(url + route);
 			if (status !== 200) throw new Error(`GET ${route} → ${status} (expected 200)`);
 			console.log(`[smoke-server] GET ${route} → 200`);
+		}
+
+		// 3) Exercise the actual lazy OAuth flow, not just the login route import.
+		// All files are in the throwaway data dir; no account or tokens are used.
+		const subscription = `${url}/api/subscription`;
+		const request = async (method) => {
+			const response = await fetch(subscription, {
+				method,
+				headers: { Origin: url },
+				signal: AbortSignal.timeout(5000),
+			});
+			const state = await response.json();
+			if (!response.ok) throw new Error(`Subscription ${method} → ${response.status}`);
+			return state;
+		};
+		try {
+			await request("POST");
+			let state;
+			const deadline = Date.now() + BOOT_TIMEOUT_MS;
+			do {
+				state = await request("GET");
+				if (state.status === "error") throw new Error(state.error);
+				if (state.authUrl && state.prompt) break;
+				await new Promise((r) => setTimeout(r, POLL_MS));
+			} while (Date.now() < deadline);
+			if (!state.authUrl || !state.prompt) throw new Error("ChatGPT login did not produce its browser interaction");
+			if (new URL(state.authUrl).origin !== "https://auth.openai.com") throw new Error("Unexpected ChatGPT authorization origin");
+			console.log("[smoke-server] ChatGPT browser login initialized");
+		} finally {
+			const state = await request("DELETE");
+			if (state.status !== "idle" || state.connected) throw new Error("ChatGPT login did not cancel cleanly");
 		}
 	} catch (err) {
 		failed = err;

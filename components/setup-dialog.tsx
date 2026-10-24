@@ -47,6 +47,7 @@ import { ProviderMenuList } from "@/components/settings/model-menu";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
 import { ThinkingMenuList } from "@/components/settings/model-menu";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { SubscriptionLogin } from "@/components/subscription-login";
 
 /** The pickers' slot identity — same roster language as the Agent
  *  section's slot rows. */
@@ -147,6 +148,8 @@ export function SetupKeysBody({
 }) {
 	return (
 		<div className="flex flex-col gap-3 px-6 py-5" data-testid="setup-stage-keys">
+			<SubscriptionLogin />
+			<div className="border-t border-border pt-3 text-xs text-muted-foreground">Or use an API key</div>
 			<p className="text-sm text-foreground">Add a provider key.</p>
 			<p className="text-xs text-muted-foreground">
 				Choose your AI provider and paste its API key. You’ll pick your models next.

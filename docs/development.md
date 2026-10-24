@@ -41,12 +41,26 @@ Secrets and machine-specific paths only. Model choice and thinking budgets are t
 
 | Variable | Purpose |
 |---|---|
-| `OPENROUTER_API_KEY` | required — all LLM calls go through OpenRouter |
+| Provider API-key variables, e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | optional — configure the providers used by your selected model slots; ChatGPT subscription sign-in is an alternative for OpenAI |
 | `GOOGLE_SEARCH_API_KEY` + `GOOGLE_CSE_ID` | researcher's `web_search` (Google Custom Search) |
 | `DEEPGRAM_API_KEY` | optional — dictation (STT token minting; audio streams browser→Deepgram, never through the server) |
 | `CHROME_PATH` | optional system Chrome fallback for demo verification; the app's own browser helper is primary (nothing is downloaded) |
 
 The packaged desktop app takes keys from `userData/auth.json` (BYOK, mode 0600, read/written directly by the server via `LH_AUTH_FILE`). PDFs render natively with pdfjs/Skia; SVGs use resvg.
+
+### ChatGPT subscription authentication
+
+Setup and Settings → Keys expose the same browser sign-in controls. The integration uses `piModels().login("openai", "oauth", interaction, options)` from the pinned pi-ai dependency. Its OpenAI provider registers a public OAuth client dynamically, uses PKCE/state checks, and runs a loopback callback on port **1455**. A stable installation UUID identifies LearnHarness; neither a client secret nor a separately registered OAuth application is needed. The legacy `openai-codex` provider is not used.
+
+`src/agent/subscription-credentials.ts` supplies pi-ai's `CredentialStore`: `${LH_DATA_DIR}/subscription.json` (default `data/subscription.json`) holds the installation UUID and OAuth credentials. Writes are atomic and mode **0600**; `proper-lockfile` serializes login, refresh, and disconnect across processes. Tokens never enter `process.env`, settings, HTTP responses, or the flat `auth.json` API-key file. The existing data-directory tracing exclusion keeps them out of standalone packages; OAuth's dynamically imported modules are explicitly included.
+
+`src/server/subscription.ts` bridges provider notifications/prompts into `GET/POST/DELETE /api/subscription`. One process-wide login expires after ten minutes. Cancellation aborts the flow; disconnect waits for an in-flight credential commit before deleting credentials. Mutations reject cross-origin browser requests, responses are `no-store`, stale prompt answers return 409, and provider error bodies are not returned to the browser.
+
+The catalog, composer setup guard, and server provider gates all accept saved subscription credentials. pi-ai gives those credentials precedence over ambient OpenAI API keys and automatically refreshes them under the store lock. Refresh failure remains an error, not a switch to API billing. Disconnect removes only the OAuth credential; the installation UUID and any API key remain.
+
+For a remote development server, paste the **full final redirect URL** into the pending sign-in form if the browser's loopback callback cannot reach the server. Keep port 1455 free of other pending Codex logins. This remains a trusted, single-user local application, not a public multi-user OAuth service.
+
+Deterministic coverage: `node --import tsx --test tests/subscription.test.ts`. The packaged-server smoke (`node scripts/smoke-server.mjs`, after build and payload curation) also starts and cancels the actual browser login flow, catching missing dynamically imported OAuth helpers without contacting OpenAI. A real account authorization and model request additionally require a human to complete OpenAI sign-in; these checks do not establish account eligibility.
 
 ## Architecture
 

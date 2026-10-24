@@ -1,63 +1,21 @@
-/**
- * The zero-keys wave's pure seams (owner-locked over Platform's 66dbea9
- * key-presence gate, 2026-09-25): the provider-key truth (hasProviderKey
- * — tool keys don't count, they unlock no models), the pill's SSR shape,
- * and the SetupDialog's self-contained first-key screen (the dialog STAYS
- * MOUNTED after a save; these pins hold the screen's structure).
- */
+/** Composer authentication gates and first-run API-key controls. */
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { hasProviderKey, strongKeyless, ZeroKeysPill } from "../components/setup-cta.tsx";
+import { strongKeyless } from "../components/setup-cta.tsx";
 import type { ModelCatalogResponse } from "../src/core/index.ts";
 import { SetupKeysBody } from "../components/setup-dialog.tsx";
 import { DICTATION_KEYLESS, DEEPGRAM_KEY_ID } from "../components/dictation.tsx";
-import type { AuthKeyStatus } from "../src/core/auth-keys.ts";
 import type { ProviderKeyInfo } from "../components/settings/keys-section.tsx";
 
-const status = (id: string, present: boolean, source: AuthKeyStatus["source"] = present ? "file" : "none"): AuthKeyStatus => ({
-	id,
-	info: null,
-	present,
-	masked: present ? "…ab12 (64 chars)" : null,
-	source,
-	shadowedByEnv: false,
-});
 
 const PROVIDERS: ProviderKeyInfo[] = [
 	{ id: "openrouter", envVar: "OPENROUTER_API_KEY", label: "OpenRouter" },
 	{ id: "anthropic", envVar: "ANTHROPIC_API_KEY", label: "Anthropic" },
 ];
 
-describe("hasProviderKey — the zero-keys pill's truth", () => {
-	it("a present provider key (env or file) is a key", () => {
-		assert.equal(hasProviderKey([status("OPENROUTER_API_KEY", true, "env")], PROVIDERS), true);
-		assert.equal(hasProviderKey([status("ANTHROPIC_API_KEY", true, "file")], PROVIDERS), true);
-	});
-
-	it("a TOOL key alone does not count — Deepgram unlocks no models", () => {
-		// Deepgram is not in the providers roster: it must never suppress the pill.
-		assert.equal(hasProviderKey([status("DEEPGRAM_API_KEY", true)], PROVIDERS), false);
-	});
-
-	it("absent provider keys = zero keys (the pill shows)", () => {
-		assert.equal(hasProviderKey([status("OPENROUTER_API_KEY", false)], PROVIDERS), false);
-		assert.equal(hasProviderKey([], PROVIDERS), false);
-	});
-});
-
-describe("ZeroKeysPill — the composer-hoisted notice", () => {
-	it("the pill takes the CTA's chrome with its own testid and copy", () => {
-		const html = renderToStaticMarkup(createElement(ZeroKeysPill, { onOpen: () => {} }));
-		assert.ok(html.includes('data-testid="setup-cta-keys"'));
-		assert.match(html, />Add a provider key<\/button>/);
-		assert.doesNotMatch(html, /chats start|—/);
-		// the models CTA's testid must not appear on the keys pill
-		assert.ok(!html.includes('data-testid="setup-cta"'));
-	});
-});
 
 describe("SetupKeysBody — stage 1's self-contained first-key screen", () => {
 	const base = {

@@ -12,6 +12,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { type ModelRole } from "../../config.ts";
 import { DEFAULT_THINKING_ORDER } from "../core/settings.ts";
 import packageMetadata from "../../package.json" with { type: "json" };
+import { subscriptionCredentials } from "./subscription-credentials.ts";
 
 /** App identity is immutable and shared by Models and every native Agent.
  * Agent's default Pi attribution otherwise overrides the Models identity. */
@@ -45,17 +46,11 @@ export type { ThinkingLevel };
 
 let collection: ReturnType<typeof createModels> | undefined;
 
-/** The process-wide pi-ai Models collection — EVERY builtin provider's
- *  catalog (model slots wave, 2026-09-20): engines and the picker resolve
- *  against all of pi-ai's per-provider catalogs, so a settings slot can pin
- *  any native model id. Auth is resolved per request by pi-ai itself from
- *  the environment (the keys seam reflects file-saved keys into env), and
- *  a provider with no key simply fails its stream with "not configured" —
- *  honest, late, and unreachable through the picker, which gates on
- *  keyPresent. */
+/** Shared provider collection. Stored ChatGPT credentials take precedence over
+ * API-key env vars; pi-ai refreshes them under the credential-store lock. */
 export function piModels() {
 	if (!collection) {
-		collection = createModels({ identity: APP_IDENTITY });
+		collection = createModels({ identity: APP_IDENTITY, credentials: subscriptionCredentials });
 		for (const provider of builtinProviders()) collection.setProvider(provider);
 	}
 	return collection;
@@ -88,11 +83,8 @@ function defaultThinkingLevel(model: Model<Api>): ThinkingLevel {
 	return supported[0] ?? "off";
 }
 
-/** The production engine for a RESOLVED spec (model slots wave,
- *  2026-09-20): provider-aware catalog lookup + thinking clamp. The API
- *  key is resolved by pi-ai itself from the environment per request (the
- *  keys seam reflects file-saved keys into env), so the engine never
- *  hardcodes OpenRouter's. */
+/** Resolve a model and thinking level; pi-ai selects subscription or API-key
+ * auth at request time, without falling back to API billing on refresh errors. */
 export function piEngineForSpec(spec: ResolvedModelSpec): PiEngine {
 	const models: Models = piModels();
 	const model = models.getModel(spec.provider, spec.id);
