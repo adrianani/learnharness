@@ -33,6 +33,8 @@ npx tsx --env-file=.env.local scripts/replay-layout.ts        # re-derive layout
 npx tsx scripts/sync-pricing.ts                               # regenerate core/prices.ts tables
 ```
 
+Use Node 26 and its bundled npm when updating `package-lock.json` (the CI runner currently uses Node 26.12.1 / npm 11.20.0). After a dependency change, verify `npm ci`, not just `npm install`: a populated local dependency tree can hide missing lockfile entries that fail on a clean GitHub runner.
+
 For Windows/Linux packages and the three-OS CI/release flow, see [`desktop-release.md`](desktop-release.md). Native renderer binaries are traced per platform, so release builds run on the target OS, not as cross-builds from macOS.
 
 ## Environment (`.env.local`)
